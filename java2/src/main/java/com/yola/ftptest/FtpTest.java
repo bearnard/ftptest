@@ -49,14 +49,6 @@ public class FtpTest {
                    try {
                      File[] filesToUpload = future.get();
                      dirResults.add(filesToUpload);
-                     for (File g : filesToUpload) {
-                         if(!g.isDirectory()) {
-                             Callable<Boolean> file_worker = new FtpFileUploader(g, uri);
-                             Future<Boolean> submit_file = fileExecutor.submit(file_worker);
-                             fileList.add(submit_file);
-                             System.out.println("UPLOAD: " + g.getPath());
-                         }
-                     }
 
                    } catch (InterruptedException e) {
                      e.printStackTrace();
@@ -65,6 +57,12 @@ public class FtpTest {
                    }
                  }
                  System.out.println(entry.getPath()) ;
+               }
+               else { 
+                   Callable<Boolean> file_worker = new FtpFileUploader(entry, uri);
+                   Future<Boolean> submit_file = fileExecutor.submit(file_worker);
+                   fileList.add(submit_file);
+                   System.out.println("UPLOAD: " + entry.getPath());
                }
                // Recursive call to traverse
             }
@@ -109,16 +107,6 @@ public class FtpTest {
     fileExecutor = Executors.newFixedThreadPool(concurrency);
     dirExecutor = Executors.newFixedThreadPool(concurrency);
     // do root files
-    for (File g : root.listFiles()) {
-        
-         if(!g.isDirectory()) {
-             Callable<Boolean> file_worker = new FtpFileUploader(g, uri);
-             Future<Boolean> submit_file = fileExecutor.submit(file_worker);
-             fileList.add(submit_file);
-             System.out.println("UPLOAD: " + g.getPath());
-         }
-
-    }
     traverse(root);
     List<Boolean> fileResults = new ArrayList<Boolean>();
     // Now retrieve the result
