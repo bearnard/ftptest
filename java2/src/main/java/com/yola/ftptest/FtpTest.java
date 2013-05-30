@@ -43,19 +43,6 @@ public class FtpTest {
                  System.out.println("MKDIR: " + entry.getPath());
                  dirList.add(submit_dir);
                  
-                 List<File[]> dirResults = new ArrayList<File[]>();
-                 // Now retrieve the result and start ftping the files...
-                 for (Future<File[]> future : dirList) {
-                   try {
-                     File[] filesToUpload = future.get();
-                     dirResults.add(filesToUpload);
-
-                   } catch (InterruptedException e) {
-                     e.printStackTrace();
-                   } catch (ExecutionException e) {
-                     e.printStackTrace();
-                   }
-                 }
                  System.out.println(entry.getPath()) ;
                }
                else { 
@@ -65,6 +52,19 @@ public class FtpTest {
                    System.out.println("UPLOAD: " + entry.getPath());
                }
                // Recursive call to traverse
+            }
+            List<File[]> dirResults = new ArrayList<File[]>();
+            // Now retrieve the result and start ftping the files...
+            for (Future<File[]> future : dirList) {
+              try {
+                File[] filesToUpload = future.get();
+                dirResults.add(filesToUpload);
+
+              } catch (InterruptedException e) {
+                e.printStackTrace();
+              } catch (ExecutionException e) {
+                e.printStackTrace();
+              }
             }
 
             for( File entry : entries )
