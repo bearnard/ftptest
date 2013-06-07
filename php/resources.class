@@ -1,0 +1,93 @@
+<?php
+
+// Based on http://stackoverflow.com/questions/1387235/problem-with-curl-multi
+
+class ResourceDownloader
+{
+    private $resources; // 
+    private $fps = array(); // local file handles
+    private $multiHandle;
+    private $maxConcurrent = 2;
+    private $currentIndex  = 0;
+    private $info          = array();
+    private $options       = array(CURLOPT_RETURNTRANSFER => true,
+                                   CURLOPT_FOLLOWLOCATION => true,
+                                   CURLOPT_MAXREDIRS      => 3,
+                                   CURLOPT_TIMEOUT        => 30);
+
+    public function __construct($todo, $concurrent)
+    {
+        $this->resources = $todo;
+        $this->maxConcurrent = $concurrent;
+        $this->multiHandle = curl_multi_init();
+    }
+
+    private function mkdir_p($target) {
+
+        // safe mode fails with a trailing slash under certain PHP versions.
+        $target = rtrim($target, '/'); // Use rtrim() instead of untrailingslashit to avoid formatting.php dependency.
+        if (empty($target))
+            $target = '/';
+
+        if (file_exists($target))
+            return @is_dir($target);
+
+        // Attempting to create the directory may clutter up our display.
+        if ( @mkdir($target) ) {
+            $stat = @stat(dirname($target));
+            $dir_perms = $stat['mode'] & 0007777;  // Get the permission bits.
+            @chmod($target, $dir_perms);
+            return true;
+        } elseif (is_dir(dirname($target))) {
+                return false;
+        }
+
+        // If the above failed, attempt to create the parent node, then try again.
+        if ( ( $target != '/' ) && ( mkdir_p( dirname( $target ) ) ) )
+            return mkdir_p( $target );
+
+        return false;
+    }
+    public function process()
+    {
+        $running = 0;
+        do {
+            $this->_addHandles(min(array($this->maxConcurrent - $running, $this->_moreToDo())));
+            while ($exec = curl_multi_exec($this->multiHandle, $running) === -1) {
+            }
+            curl_multi_select($this->multiHandle);
+            while ($multiInfo = curl_multi_info_read($this->multiHandle, $msgs)) {
+                curl_multi_remove_handle($this->multiHandle, $multiInfo['handle']);
+                curl_close($multiInfo['handle']);
+            }
+        } while ($running || $this->_moreTodo());
+	// Need to close local file handles, doing it here is lame, we should do it on completion of a resource
+        foreach ($this->fps as &$fp) {
+            fclose($fp);
+        } 
+        return $this;
+    }    
+
+    private function _addHandles($num)
+    {
+        while ($num-- > 0) {
+        
+            $handle = curl_init($this->resources[$this->currentIndex]['url']);
+            $this->mkdir_p(dirname($this->resources[$this->currentIndex]['path']));
+            $this->fps[$this->currentIndex] = fopen ($this->resources[$this->currentIndex]['path'], 'w+');
+            curl_setopt_array($handle, $this->options);
+            curl_setopt($handle, CURLOPT_FILE, $this->fps[$this->currentIndex]);
+            curl_multi_add_handle($this->multiHandle, $handle);
+            $this->info[$handle]['url'] = $this->resources[$this->currentIndex]['url'];
+            $this->currentIndex++;
+        }
+    }        
+
+    private function _moreToDo()
+    {
+        return count($this->resources) - $this->currentIndex;
+    }
+
+}
+
+?>

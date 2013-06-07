@@ -1,5 +1,5 @@
 <?php
-
+/*
 $data = file_get_contents('php://input');
 
 $api_data = json_decode($data);
@@ -11,8 +11,19 @@ $local_zip = "tmp/artifact_" . $siteid . ".zip";
 get_artifact($zip_url, $local_zip);
 unzip_artifact($local_zip, $path);
 cleanup($siteid);
+*/
+require_once "resources.class";
 
-
+$resources = array();
+for($x=0;$x<20;$x++) {
+    $res = array(
+        "url"=>"https://resources_qa.s3.amazonaws.com/ff8081813caa19b7013caab7c4e0009e.1360073835744?Signature=fSrvyQ3CKBgZREaQ2S8113PSsmM%3D&Expires=1370732659&AWSAccessKeyId=15QD3JT20RPTAAMGSWG2",
+        "path"=>"/foo_resources/" . $x . ".jpg"
+    );
+    array_push($resources, $res);
+}
+$mc = new ResourceDownloader($resources, 5);
+$mc->process();
 
 function base64_url_decode($input)
 {
@@ -43,11 +54,71 @@ function unzip_artifact($local_file, $path) {
     if ($zip->open($local_file) === TRUE) {
         $zip->extractTo($path);
         $zip->close();
-
+      
     } else {
         return false;
     }
 }
+function fetch_resources($resources, $path){ 
+     
+    $mh = curl_multi_init();
+    $conn = array();
+    foreach ($resources as $i => $res) {
+
+	$local_file = $res['path'];
+	$local_dir = dirname($local_file);
+	mkdir_p($local_dir, 755, true);
+	$url = $res['url'];
+        $conn[$i]=curl_init($url);
+        $fp[$i]=fopen ($local_file, "w");
+	curl_set_opt(CURLOPT_MAXCONNECTS, 15);
+        curl_setopt ($conn[$i], CURLOPT_FILE, $fp[$i]);
+        curl_setopt ($conn[$i], CURLOPT_HEADER ,0);
+        curl_setopt($conn[$i],CURLOPT_CONNECTTIMEOUT,60);
+        curl_multi_add_handle ($mh,$conn[$i]);
+    }
+
+    do {
+        $n=curl_multi_exec($mh,$active);
+    }
+
+    while ($active);
+    foreach ($resources as $i => $res) {
+	echo $i . "\n";
+        curl_multi_remove_handle($mh,$conn[$i]);
+        curl_close($conn[$i]);
+        fclose ($fp[$i]);
+    }
+    curl_multi_close($mh);
+} 
+
+function mkdir_p( $target ) {
+
+	// safe mode fails with a trailing slash under certain PHP versions.
+	$target = rtrim($target, '/'); // Use rtrim() instead of untrailingslashit to avoid formatting.php dependency.
+	if ( empty($target) )
+		$target = '/';
+
+	if ( file_exists( $target ) )
+		return @is_dir( $target );
+
+	// Attempting to create the directory may clutter up our display.
+	if ( @mkdir( $target ) ) {
+		$stat = @stat( dirname( $target ) );
+		$dir_perms = $stat['mode'] & 0007777;  // Get the permission bits.
+		@chmod( $target, $dir_perms );
+		return true;
+	} elseif ( is_dir( dirname( $target ) ) ) {
+			return false;
+	}
+
+	// If the above failed, attempt to create the parent node, then try again.
+	if ( ( $target != '/' ) && ( mkdir_p( dirname( $target ) ) ) )
+		return mkdir_p( $target );
+
+	return false;
+}
+
 
 function cleanup($siteid) {
     $one_time_file = basename($_SERVER['PHP_SELF']);
